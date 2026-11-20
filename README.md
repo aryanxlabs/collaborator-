@@ -11,14 +11,18 @@ resource sharing, joint projects) with a sector and location, browse and match,
 connect and agree terms directly, and share lessons as
 **Problem → Action → Outcome**.
 
-## Tech stack (as per the project PPT)
+## Tech stack
 
 | Layer    | Technology                          |
 | -------- | ----------------------------------- |
 | Frontend | React 19 + Vite                     |
 | Backend  | Node.js + Express.js (REST API)     |
-| Database | MySQL 8.0                           |
-| Hosting  | Vercel (frontend), Render (backend), Railway (MySQL) |
+| Database | PostgreSQL (Supabase)               |
+| Hosting  | Vercel (frontend), Render (backend), Supabase (Postgres) |
+
+> Note: the project PPT names MySQL / Railway for the database. The live
+> build now uses Supabase Postgres instead, as decided for deployment;
+> the rest of the stack is unchanged.
 
 ## Repo layout
 
@@ -35,9 +39,9 @@ collaborator-fullstack/
 ├── backend/           Express REST API
 │   └── src/
 │       ├── server.js  Routes: listings, connect requests, matches, health
-│       └── db.js      MySQL connection pool (mysql2)
+│       └── db.js      Postgres connection pool (pg, DATABASE_URL)
 ├── db/
-│   ├── schema.sql     MySQL 8.0 tables: listings, connect_requests
+│   ├── schema.sql     PostgreSQL tables: listings, connect_requests
 │   └── seed.sql       12 sample listings from rural Maharashtra
 └── README.md
 ```
@@ -55,25 +59,29 @@ collaborator-fullstack/
 
 ## Run locally
 
-### 1. Database (MySQL 8.0)
+### 1. Database (Supabase Postgres)
 
-```bash
-mysql -u root -p < db/schema.sql
-mysql -u root -p collaborator < db/seed.sql
-```
+Create a free project at [supabase.com](https://supabase.com), then in the
+dashboard go to **SQL Editor** and run `db/schema.sql` first, then
+`db/seed.sql`. (No `CREATE DATABASE` step: Supabase provides the database.)
+
+Copy the connection string from **Project Settings → Database →
+Connection string (URI)** — it looks like
+`postgresql://postgres:<password>@db.<project-ref>.supabase.co:5432/postgres?sslmode=require`
+— and put it in the backend `.env` as `DATABASE_URL` (see below).
 
 ### 2. Backend
 
 ```bash
 cd backend
-cp .env.example .env        # fill in your own DB credentials
+cp .env.example .env        # fill in DATABASE_URL with your Supabase connection string
 npm install
 npm start                   # listens on http://localhost:5000
 ```
 
 Check it: `curl http://localhost:5000/api/health`
-→ `{"status":"ok","db":"connected"}` when MySQL is reachable.
-If MySQL is down the API still boots and answers `503` with a clear
+→ `{"status":"ok","db":"connected"}` when Postgres is reachable.
+If Postgres is down the API still boots and answers `503` with a clear
 "Database unavailable" message instead of crashing.
 
 ### 3. Frontend
@@ -90,15 +98,15 @@ For a production build, set `VITE_API_URL` to the deployed backend URL
 
 ## Deploy
 
-**Database — Railway (MySQL 8.0):** create a MySQL service, run
-`db/schema.sql` then `db/seed.sql` against it, and copy its connection
-details (host, port, user, password, database) into the backend's
-environment variables.
+**Database — Supabase (Postgres):** create a project, run
+`db/schema.sql` then `db/seed.sql` in the SQL Editor, and copy the
+connection string (Project Settings → Database → Connection string) into
+the backend's `DATABASE_URL` environment variable.
 
 **Backend — Render:** create a Web Service from the `backend/` folder
 (or the repo root with root directory set to `backend/`), build command
 `npm install`, start command `npm start`, and set the environment
-variables `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `PORT`.
+variables `DATABASE_URL` and `PORT`.
 
 **Frontend — Vercel:** import the repo, set the root directory to
 `frontend/`, build command `npm run build`, output directory `dist`,
@@ -108,8 +116,8 @@ and set `VITE_API_URL` to the Render backend URL (for example
 ## Notes
 
 - No paid tiers or plans are shown anywhere on the site.
-- All listings, connect requests and matches are stored in MySQL. Nothing
-  is kept only in the browser: reloading the page reloads the same data
-  from the API.
+- All listings, connect requests and matches are stored in PostgreSQL
+  (Supabase). Nothing is kept only in the browser: reloading the page
+  reloads the same data from the API.
 - Animations are fast springy pop-ins (~0.55s) and are disabled when the
   user prefers reduced motion.

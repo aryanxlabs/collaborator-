@@ -30,7 +30,7 @@ function dbUnavailable(res, err) {
   return res.status(503).json({
     error: 'Database unavailable',
     message:
-      'The database could not be reached. Please check the MySQL server and the DB_* settings in .env and try again.',
+      'The database could not be reached. Please check the PostgreSQL (Supabase) database and the DATABASE_URL setting in .env and try again.',
   });
 }
 
@@ -48,7 +48,7 @@ app.get('/api/health', async (req, res) => {
   return res.status(503).json({
     status: 'error',
     db: 'unavailable',
-    message: 'Database could not be reached. Check that MySQL is running and DB_* is set correctly.',
+    message: 'Database could not be reached. Check that the Supabase database is up and DATABASE_URL is set correctly.',
   });
 });
 
@@ -62,24 +62,25 @@ app.get('/api/listings', async (req, res) => {
   const params = [];
 
   if (type && (type === 'offer' || type === 'need')) {
-    conditions.push('type = ?');
     params.push(type);
+    conditions.push(`type = $${params.length}`);
   }
   if (sector && SECTORS.includes(sector)) {
-    conditions.push('sector = ?');
     params.push(sector);
+    conditions.push(`sector = $${params.length}`);
   }
   if (search && String(search).trim() !== '') {
     const like = `%${String(search).trim()}%`;
-    conditions.push('(title LIKE ? OR description LIKE ? OR location LIKE ? OR provider_name LIKE ?)');
     params.push(like, like, like, like);
+    // ILIKE: Postgres LIKE is case-sensitive, MySQL LIKE was not.
+    conditions.push(`(title ILIKE $${params.length - 3} OR description ILIKE $${params.length - 2} OR location ILIKE $${params.length - 1} OR provider_name ILIKE $${params.length})`);
   }
 
   const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
   const sql = `SELECT * FROM listings ${where} ORDER BY created_at DESC, id DESC`;
 
   try {
-    const [rows] = await pool.query(sql, params);
+    const { rows } = await pool.query(sql, params);
     return res.json(rows);
   } catch (err) {
     return dbUnavailable(res, err);
@@ -93,7 +94,7 @@ app.get('/api/listings/:id', async (req, res) => {
     return res.status(400).json({ error: 'Invalid listing id' });
   }
   try {
-    const [rows] = await pool.query('SELECT * FROM listings WHERE id = ?', [id]);
+    const { rows } = await pool.query('SELECT * FROM listings WHERE id = $1', [id]);
     if (rows.length === 0) {
       return res.status(404).json({ error: 'Listing not found' });
     }
@@ -121,9 +122,10 @@ app.post('/api/listings', async (req, res) => {
   }
 
   try {
-    const [result] = await pool.query(
+    const { rows } = await pool.query(
       `INSERT INTO listings (title, description, type, sector, location, provider_name, contact_name)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       RETURNING *`,
       [
         String(title).trim(),
         String(description).trim(),
@@ -134,7 +136,6 @@ app.post('/api/listings', async (req, res) => {
         String(contact_name).trim(),
       ],
     );
-    const [rows] = await pool.query('SELECT * FROM listings WHERE id = ?', [result.insertId]);
     return res.status(201).json(rows[0]);
   } catch (err) {
     return dbUnavailable(res, err);
@@ -153,16 +154,16 @@ app.post('/api/listings/:id/connect', async (req, res) => {
   }
 
   try {
-    const [listing] = await pool.query('SELECT id FROM listings WHERE id = ?', [id]);
+    const { rows: listing } = await pool.query('SELECT id FROM listings WHERE id = $1', [id]);
     if (listing.length === 0) {
       return res.status(404).json({ error: 'Listing not found' });
     }
-    const [result] = await pool.query(
+    const { rows } = await pool.query(
       `INSERT INTO connect_requests (listing_id, requester_name, message, status)
-       VALUES (?, ?, ?, 'pending')`,
+       VALUES ($1, $2, $3, 'pending')
+       RETURNING *`,
       [id, String(requester_name).trim(), message ? String(message).trim() : null],
     );
-    const [rows] = await pool.query('SELECT * FROM connect_requests WHERE id = ?', [result.insertId]);
     return res.status(201).json(rows[0]);
   } catch (err) {
     return dbUnavailable(res, err);
@@ -182,8 +183,8 @@ app.get('/api/matches', async (req, res) => {
   }
   try {
     const like = `%${location}%`;
-    const [rows] = await pool.query(
-      'SELECT * FROM listings WHERE location LIKE ? ORDER BY created_at DESC, id DESC',
+    const { rows } = await pool.query(
+      'SELECT * FROM listings WHERE location ILIKE $1 ORDER BY created_at DESC, id DESC',
       [like],
     );
     return res.json({ location, count: rows.length, matches: rows });

@@ -1,8 +1,6 @@
 -- Collaborator – Grow Together
 -- Sample data: 12 realistic listings from rural Maharashtra.
--- Run after db/schema.sql:  mysql -u <user> -p collaborator < db/seed.sql
-
-USE collaborator;
+-- Run after db/schema.sql, in the Supabase dashboard SQL Editor.
 
 INSERT INTO listings (title, description, type, sector, location, provider_name, contact_name) VALUES
 (
@@ -63,5 +61,5 @@ INSERT INTO listings (title, description, type, sector, location, provider_name,
 (
   'Need jar labels and packaging design for pickles',
   'We make homemade pickles in Mumbai. Need attractive labels and safe jars so our pickles can reach more shops.',
-  'need', 'Packaging', 'Mumbai', "Aai's Pickles", 'Meena Kulkarni'
+  'need', 'Packaging', 'Mumbai', 'Aai''s Pickles', 'Meena Kulkarni'
 );

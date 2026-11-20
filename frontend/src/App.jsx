@@ -246,7 +246,7 @@ export default function App() {
             <div className="error-box" role="alert">
               <strong>Listings could not be loaded.</strong>
               <br />
-              {error} Check that the backend and the MySQL database are running.
+              {error} Check that the backend and the Supabase database are running.
             </div>
           )}
 

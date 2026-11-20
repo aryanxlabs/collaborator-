@@ -1,47 +1,36 @@
 -- Collaborator – Grow Together
--- MySQL 8.0 schema
--- Run:  mysql -u <user> -p < db/schema.sql
--- Then:  mysql -u <user> -p collaborator < db/seed.sql
-
-CREATE DATABASE IF NOT EXISTS collaborator
-  CHARACTER SET utf8mb4
-  COLLATE utf8mb4_unicode_ci;
-
-USE collaborator;
+-- PostgreSQL schema (Supabase)
+-- Run in the Supabase dashboard: SQL Editor → paste this file → Run.
+-- Then run db/seed.sql the same way.
+-- No CREATE DATABASE / USE statements: Supabase already provides the
+-- database, and the SQL Editor runs against it.
 
 CREATE TABLE IF NOT EXISTS listings (
-  id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   title VARCHAR(200) NOT NULL,
   description TEXT NOT NULL,
-  type ENUM('offer', 'need') NOT NULL,
+  type TEXT NOT NULL CHECK (type IN ('offer', 'need')),
   sector VARCHAR(100) NOT NULL,
   location VARCHAR(150) NOT NULL,
   provider_name VARCHAR(150) NOT NULL,
   contact_name VARCHAR(150) NOT NULL,
-  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (id),
-  INDEX idx_listings_type (type),
-  INDEX idx_listings_sector (sector),
-  INDEX idx_listings_location (location),
-  FULLTEXT INDEX idx_listings_search (title, description, provider_name)
-) ENGINE = InnoDB
-  DEFAULT CHARACTER SET = utf8mb4
-  COLLATE = utf8mb4_unicode_ci;
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_listings_type ON listings (type);
+CREATE INDEX IF NOT EXISTS idx_listings_sector ON listings (sector);
+CREATE INDEX IF NOT EXISTS idx_listings_location ON listings (location);
+CREATE INDEX IF NOT EXISTS idx_listings_title ON listings (title);
+CREATE INDEX IF NOT EXISTS idx_listings_description ON listings (description);
+CREATE INDEX IF NOT EXISTS idx_listings_provider_name ON listings (provider_name);
 
 CREATE TABLE IF NOT EXISTS connect_requests (
-  id INT UNSIGNED NOT NULL AUTO_INCREMENT,
-  listing_id INT UNSIGNED NOT NULL,
+  id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  listing_id INTEGER NOT NULL REFERENCES listings (id) ON DELETE CASCADE,
   requester_name VARCHAR(150) NOT NULL,
-  message TEXT NULL,
-  status ENUM('pending', 'accepted', 'declined') NOT NULL DEFAULT 'pending',
-  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (id),
-  INDEX idx_connect_listing (listing_id),
-  CONSTRAINT fk_connect_listing
-    FOREIGN KEY (listing_id)
-    REFERENCES listings (id)
-    ON DELETE CASCADE
-    ON UPDATE CASCADE
-) ENGINE = InnoDB
-  DEFAULT CHARACTER SET = utf8mb4
-  COLLATE = utf8mb4_unicode_ci;
+  message TEXT,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'declined')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_connect_listing ON connect_requests (listing_id);
