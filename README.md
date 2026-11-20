@@ -13,16 +13,17 @@ connect and agree terms directly, and share lessons as
 
 ## Tech stack
 
-| Layer    | Technology                          |
-| -------- | ----------------------------------- |
-| Frontend | React 19 + Vite                     |
-| Backend  | Node.js + Express.js (REST API)     |
-| Database | PostgreSQL (Supabase)               |
-| Hosting  | Vercel (frontend), Render (backend), Supabase (Postgres) |
+| Layer    | Technology                                       |
+| -------- | ------------------------------------------------ |
+| Frontend | React 19 + Vite (talks directly to Supabase)     |
+| Backend  | None — no custom server                          |
+| Database | PostgreSQL (Supabase)                            |
+| Hosting  | Vercel (frontend), Supabase (Postgres)           |
 
-> Note: the project PPT names MySQL / Railway for the database. The live
-> build now uses Supabase Postgres instead, as decided for deployment;
-> the rest of the stack is unchanged.
+> Note: the project PPT names MySQL / Railway for the database and a
+> Node + Express backend. The live build uses Supabase Postgres directly
+> from the frontend instead, as decided for deployment; the PPT is
+> unchanged.
 
 ## Repo layout
 
@@ -32,92 +33,84 @@ collaborator-fullstack/
 │   ├── src/
 │   │   ├── App.jsx    All sections (hero, showcase, how it works, features,
 │   │   │              30-day plan, case studies, post form, FAQ, scan CTA)
-│   │   ├── api.js     API helpers (listings, connect, matches)
+│   │   ├── api.js     Data helpers (listings, connect, matches) via Supabase
+│   │   ├── supabase.js  Supabase client (VITE_SUPABASE_URL / ANON_KEY)
 │   │   ├── hooks.js   Scroll pop-in animation hook
 │   │   └── index.css  Design system (royal blue / pink / teal)
-│   └── .env.example   VITE_API_URL (production backend URL)
-├── backend/           Express REST API
-│   └── src/
-│       ├── server.js  Routes: listings, connect requests, matches, health
-│       └── db.js      Postgres connection pool (pg, DATABASE_URL)
+│   └── .env.example   VITE_SUPABASE_URL + VITE_SUPABASE_ANON_KEY
+├── backend/           Express REST API — NO LONGER USED. Kept in the repo
+│   └── src/           for reference only; the frontend no longer calls it.
 ├── db/
 │   ├── schema.sql     PostgreSQL tables: listings, connect_requests
-│   └── seed.sql       12 sample listings from rural Maharashtra
+│   ├── seed.sql       12 sample listings from rural Maharashtra
+│   └── rls_policies.sql  Row Level Security: anon can read/insert listings
+│                          and insert connect_requests
 └── README.md
 ```
 
-## API endpoints
+## Data access (direct Supabase, no API server)
 
-| Method | Path                          | Description                                  |
-| ------ | ----------------------------- | -------------------------------------------- |
-| GET    | `/api/health`                 | API + database status                        |
-| GET    | `/api/listings`               | List all; filter with `?search=&sector=&type=` |
-| GET    | `/api/listings/:id`           | One listing                                  |
-| POST   | `/api/listings`               | Create a listing (validated)                 |
-| POST   | `/api/listings/:id/connect`   | Save a connect request for a listing         |
-| GET    | `/api/matches?location=...`   | Listings matching a location                 |
+The frontend uses `@supabase/supabase-js` against the `listings` and
+`connect_requests` tables:
+
+| Action                     | Supabase query                                          |
+| -------------------------- | ------------------------------------------------------- |
+| List listings              | `listings` select, newest first; filter by `type`, `sector`, and ILIKE search across title / description / location / provider name |
+| One listing                | `listings` select by `id`                               |
+| Post a listing             | Insert into `listings` (validated in the app first)     |
+| Send a connect request     | Insert into `connect_requests` (`status` = `pending`)   |
+| Scan for matches           | `listings` where `location` ILIKE the given place       |
+
+If Supabase cannot be reached, the showcase shows "The Supabase
+database is unreachable" instead of listings.
 
 ## Run locally
 
 ### 1. Database (Supabase Postgres)
 
 Create a free project at [supabase.com](https://supabase.com), then in the
-dashboard go to **SQL Editor** and run `db/schema.sql` first, then
-`db/seed.sql`. (No `CREATE DATABASE` step: Supabase provides the database.)
+dashboard go to **SQL Editor** and run, in order: `db/schema.sql`,
+`db/seed.sql`, then `db/rls_policies.sql` (the last one turns on Row Level
+Security with the public read/post/connect policies the site needs).
+(No `CREATE DATABASE` step: Supabase provides the database.)
 
-Copy the connection string from **Project Settings → Database →
-Connection string (URI)** — it looks like
-`postgresql://postgres:<password>@db.<project-ref>.supabase.co:5432/postgres?sslmode=require`
-— and put it in the backend `.env` as `DATABASE_URL` (see below).
+Copy the two client values from **Project Settings → API** — **Project
+URL** and **anon public key** — and put them in the frontend `.env`
+(see below). These are publishable client keys, not secrets.
 
-### 2. Backend
-
-```bash
-cd backend
-cp .env.example .env        # fill in DATABASE_URL with your Supabase connection string
-npm install
-npm start                   # listens on http://localhost:5000
-```
-
-Check it: `curl http://localhost:5000/api/health`
-→ `{"status":"ok","db":"connected"}` when Postgres is reachable.
-If Postgres is down the API still boots and answers `503` with a clear
-"Database unavailable" message instead of crashing.
-
-### 3. Frontend
+### 2. Frontend
 
 ```bash
 cd frontend
+cp .env.example .env        # fill in VITE_SUPABASE_URL + VITE_SUPABASE_ANON_KEY
 npm install
-npm run dev                 # http://localhost:5173 (proxies /api to :5000)
+npm run dev                 # http://localhost:5173
 npm run build               # production build into frontend/dist/
 ```
 
-For a production build, set `VITE_API_URL` to the deployed backend URL
-(see `frontend/.env.example`).
+With no `.env` values the app builds and loads, but the showcase shows a
+"Supabase database is unreachable" error instead of listings.
 
 ## Deploy
 
 **Database — Supabase (Postgres):** create a project, run
-`db/schema.sql` then `db/seed.sql` in the SQL Editor, and copy the
-connection string (Project Settings → Database → Connection string) into
-the backend's `DATABASE_URL` environment variable.
-
-**Backend — Render:** create a Web Service from the `backend/` folder
-(or the repo root with root directory set to `backend/`), build command
-`npm install`, start command `npm start`, and set the environment
-variables `DATABASE_URL` and `PORT`.
+`db/schema.sql`, then `db/seed.sql`, then `db/rls_policies.sql` in the
+SQL Editor.
 
 **Frontend — Vercel:** import the repo, set the root directory to
 `frontend/`, build command `npm run build`, output directory `dist`,
-and set `VITE_API_URL` to the Render backend URL (for example
-`https://collaborator-api.onrender.com`).
+and set the environment variables `VITE_SUPABASE_URL` (Project URL)
+and `VITE_SUPABASE_ANON_KEY` (anon public key) from
+Supabase **Project Settings → API**.
+
+There is no backend server to deploy.
 
 ## Notes
 
 - No paid tiers or plans are shown anywhere on the site.
 - All listings, connect requests and matches are stored in PostgreSQL
-  (Supabase). Nothing is kept only in the browser: reloading the page
-  reloads the same data from the API.
+  (Supabase) and read/written directly by the frontend. Nothing is kept
+  only in the browser: reloading the page reloads the same data from
+  Supabase.
 - Animations are fast springy pop-ins (~0.55s) and are disabled when the
   user prefers reduced motion.
