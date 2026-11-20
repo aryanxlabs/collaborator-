@@ -322,7 +322,8 @@ section {
 .phone-wrap {
   position: relative;
   display: flex;
-  justify-content: center;
+  flex-direction: column;
+  align-items: center;
 }
 
 .phone {
@@ -372,9 +373,9 @@ section {
 }
 
 .stats-card {
-  position: absolute;
-  right: -6px;
-  bottom: 28px;
+  position: relative;
+  z-index: 1;
+  margin-top: -16px;
   background: #fff;
   color: var(--ink);
   border-radius: var(--radius);
@@ -1044,11 +1045,6 @@ footer a:hover {
 
   .form-row {
     grid-template-columns: 1fr;
-  }
-
-  .stats-card {
-    right: 0;
-    bottom: 12px;
   }
 
   .footer-grid {
